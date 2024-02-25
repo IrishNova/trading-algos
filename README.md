@@ -2,7 +2,7 @@
 
 _Overview_
 
-Automated trading strategies, more commonly referred to as algorithms, have grown exponentially in use by institutional and retail traders. What once was only able to be done on a pit floor, now can be executed digitally, allowing for more and more complex strategies to be implemented. This repository is a portfolio of different trading algorithms. It shows how Python can be used to implement automated trading strategies. 
+Automated trading strategies, more commonly referred to as algorithms, have grown exponentially in use by institutional and retail traders. What once was only able to be done on a pit floor, now can be executed digitally, allowing for more and more complex strategies to be implemented. This repository is a portfolio of different trading algorithms. It shows how Python can be used to research and automat trading strategies. 
 
 _Models_
 
