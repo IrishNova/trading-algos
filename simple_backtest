@@ -23,7 +23,6 @@ Disclaimer:
 """
 
 import pandas as pd
-from backtest_analysis import run_analysis
 
 
 def dummy_data():
@@ -46,12 +45,12 @@ def signals(df, span_1=30, span_2=60):
     :param df: dataframe
     """
     df['delta'] = df.closePrice.pct_change()
-    df['signal_1'] = df.closePrice.ewm(span=span_1, adjust=False).mean()
+    df['signal_1'] = df.closePrice.ewm(span=span_1, adjust=False).mean()    #In excel, these would be columns
     df['signal_2'] = df.closePrice.ewm(span=span_2, adjust=False).mean()
     df['signal_3'] = df.signal_1 - df.signal_2
     df['signal_4'] = df.signal_3.ewm(span=span_1//2, adjust=False).mean()
     df['signal_5'] = df.signal_3 - df.signal_4
-    df['long_short'] = df.signal_5 > 0 # Booline Operator 
+    df['long_short'] = df.signal_5 > 0 # Booline Operator. True = Long, False = Short 
 
 
 def p_and_l(df, starting_capital=100000):
@@ -68,4 +67,3 @@ if __name__ == "__main__":
     df = dummy_data()
     signals(df)
     p_and_l(df)
-    run_analysis(df)
