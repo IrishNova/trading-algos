@@ -31,7 +31,7 @@ def dummy_data():
     Sets datetime index.
     :return: pandas dataframe
     """
-    raw = pd.read_csv("/Users/ryanmoloney/Desktop/Furvus_Research/PortfolioProject/CL_minute_full.csv")
+    raw = pd.read_csv("cl_minute_tick.csv")
     return raw.set_index(raw.time)
 
 
