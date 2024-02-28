@@ -74,9 +74,9 @@ class SimulatedTrading:
 
     def data_fetch(self):
         x = pd.read_csv('CL_minute_full.csv')
-        self.raw = x.set_index(x.time).tail(2500)
+        self.raw = x.set_index(x.time).tail(2500) # dealing with a 640mb CSV here... 4.9m bars (rows) of data. Just need a fraction to practice with. 
 
-    def signal_generation(self):    # real-world, these signals are all generated in their own Class becuase they're propritary. You're thick if you try to make mone with the ones here. 
+    def signal_generation(self):    # real-world, these signals are all generated in their own Class becuase they're propritary. You're thick if you try to make money with the ones here. 
         self.raw['delta'] = self.raw.closePrice.pct_change()
         self.raw['signal_1'] = self.raw.closePrice.ewm(span=self.span_1, adjust=False).mean()
         self.raw['signal_2'] = self.raw.closePrice.ewm(span=self.span_2, adjust=False).mean()
