@@ -1,7 +1,7 @@
 """
 __ ** This model is under construction, anything and everything may still change** __
 
-Building off the basic_backtest model, this is what it looks like for researching. 
+Building off the basic_backtest model, this is what it looks like for researching.
 
 """
 
@@ -9,10 +9,10 @@ import pandas as pd
 import random
 
 
-class TradeBook:    # TODO ultimately this will be tied in to MongoDB
+class TradeBook:  # TODO ultimately this will be tied in to MongoDB
     def __init__(self):
         self.aum = 100000
-        self.fee = 0.50    # Not many people get this treatment, but I happen to work for a guy who does. Adjust it according to YOUR trading costs. 
+        self.fee = 0.50  # Not many people get this treatment, but I happen to work for a guy who does. Adjust it according to YOUR trading costs.
         self.long_stop = 0.025
         self.long_limit = 0.015
         self.short_limit = 0.025
@@ -20,11 +20,13 @@ class TradeBook:    # TODO ultimately this will be tied in to MongoDB
         self.trade_log = {}
 
     def slippage(self, price):
-        slippage_percentage = random.uniform(0, 0.0025)  # 0.25% max, need to measure slippage of CL in future research project
+        slippage_percentage = random.uniform(0,
+                                             0.0025)  # 0.25% max, need to measure slippage of CL in future research project
         slippage_amount = price * slippage_percentage
         return slippage_amount
 
-    def stop_target(self, price, direction):    # day one, week one risk management here people. Probalby will move this to another Class long at some point.
+    def stop_target(self, price,
+                    direction):  # day one, week one risk management here people. Probalby will move this to another Class long at some point.
         high_mark = price + (price * self.long_limit)
         low_mark = price - (price * self.long_stop)
         if direction:
@@ -33,7 +35,7 @@ class TradeBook:    # TODO ultimately this will be tied in to MongoDB
             return low_mark, high_mark
 
     def position_size(self, price):
-        return self.aum // price    # Place holder Not the way to do it, needs to model with leverage. Ultimately this will be another Class w/it's own risk management. 
+        return self.aum // price  # Place holder Not the way to do it, needs to model with leverage. Ultimately this will be another Class w/it's own risk management.
 
     def slip_generator(self, time, price, direction):
         if direction:
@@ -44,7 +46,7 @@ class TradeBook:    # TODO ultimately this will be tied in to MongoDB
         else:
             paid = price - self.slippage(price)
             self.trade_log[time] = {"transaction_price": paid,
-                                    "direction": direction}     
+                                    "direction": direction}
 
     def place_order(self, time, price, direction):
         high_mark, low_mark = self.stop_target(price, direction)
@@ -54,9 +56,10 @@ class TradeBook:    # TODO ultimately this will be tied in to MongoDB
 
 class SimulatedTrading:
 
-    def __init__(self, ema1, ema2):
+    def __init__(self, ema1, ema2, trade_book):
         self.span_1 = ema1
         self.span_2 = ema2
+        self.tb = trade_book
         self.raw = None
         self.price_now = None
         self.bar = None
@@ -74,9 +77,10 @@ class SimulatedTrading:
 
     def data_fetch(self):
         x = pd.read_csv('CL_minute_full.csv')
-        self.raw = x.set_index(x.time).tail(2500) # dealing with a 640mb CSV here... 4.9m bars (rows) of data. Just need a fraction to practice with. 
+        self.raw = x.set_index(x.time).tail(2500)
 
-    def signal_generation(self):    # real-world, these signals are all generated in their own Class becuase they're propritary. You're thick if you try to make money with the ones here. 
+    def signal_generation(
+            self):  # real-world, these signals are all generated in their own Class becuase they're propritary. You're thick if you try to make money with the ones here.
         self.raw['delta'] = self.raw.closePrice.pct_change()
         self.raw['signal_1'] = self.raw.closePrice.ewm(span=self.span_1, adjust=False).mean()
         self.raw['signal_2'] = self.raw.closePrice.ewm(span=self.span_2, adjust=False).mean()
@@ -111,42 +115,44 @@ class SimulatedTrading:
             print("open long")
             self.open_long = True
             self.wait_long = False
-            self.limit = self.price_now + (
-                    self.price_now * 0.005)  # TODO make these returned from trade ticket class
-            self.stop = self.price_now - (self.price_now * 0.005)
+            self.limit, self.stop = trade_bk.place_order(self.raw.index[self.bar],
+                                                         self.raw.closePrice.iloc[self.bar],
+                                                         True)
 
     def short_search(self):
         if self.raw.signal_4.iloc[self.bar] < self.raw.signal_5.iloc[self.bar]:
             print("open short")
             self.open_short = True
             self.wait_short = False
-            self.limit = self.price_now - (
-                    self.price_now * 0.005)  # TODO make these returned from trade ticket class
-            self.stop = self.price_now + (self.price_now * 0.005)
+            self.limit, self.stop = trade_bk.place_order(self.raw.index[self.bar],
+                                                         self.raw.closePrice.iloc[self.bar],
+                                                         False)
 
-    def new_cycle(self):    # Not ideal to have this and the above methods almost identical, but is the juice worth the squeeze on a research algo? 
+    def new_cycle(self):
+        # Not ideal to have this and the above methods almost identical, but is the juice worth the squeeze on a
+        # research algo?
         if self.raw.signal_4.iloc[self.bar] > self.raw.signal_5.iloc[self.bar]:
             print("first open Long")
             self.open_long = True
-            self.limit = self.price_now + (
-                    self.price_now * 0.005)  # TODO make these returned from trade ticket class
-            self.stop = self.price_now - (self.price_now * 0.005)
+            self.limit, self.stop = trade_bk.place_order(self.raw.index[self.bar],
+                                                         self.raw.closePrice.iloc[self.bar],
+                                                         True)
         elif self.raw.signal_4.iloc[self.bar] < self.raw.signal_5.iloc[self.bar]:
-            print("fisrs open Short")
+            print("first open Short")
             self.open_short = True
-            self.limit = self.price_now - (
-                    self.price_now * 0.005)  # TODO make these returned from trade ticket class
-            self.stop = self.price_now + (self.price_now * 0.005)
+            self.limit, self.stop = trade_bk.place_order(self.raw.index[self.bar],
+                                                         self.raw.closePrice.iloc[self.bar],
+                                                         False)
 
     def scanner(self):
         if self.wait_long:
-            self.long_search()      # look for long signal
+            self.long_search()  # look for long signal
 
         elif self.wait_short:
-            self.short_search()     # look for short signal
+            self.short_search()  # look for short signal
 
         else:
-            self.new_cycle()    # look for breakout
+            self.new_cycle()  # look for breakout
 
     def first_level_logic(self):
         if self.open_long:
@@ -165,5 +171,7 @@ class SimulatedTrading:
             self.first_level_logic()
 
 
-ts = SimulatedTrading(30, 60)
+trade_bk = TradeBook()
+ts = SimulatedTrading(30, 60, trade_bk)
 ts.run()
+print(trade_bk.trade_log)
