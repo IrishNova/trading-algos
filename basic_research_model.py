@@ -85,8 +85,8 @@ class SimulatedTrading:
         """
         Imports data from a CSV
         """
-        x = pd.read_csv('/Users/ryanmoloney/Desktop/Furvus_Research/PortfolioProject/CL_minute_full.csv')
-        self.raw = x.set_index(x.time).tail(2500)
+        x = pd.read_csv('CL_minute_full.csv')
+        self.raw = x.set_index(x.time)
 
     def signal_generation(self):
         """
