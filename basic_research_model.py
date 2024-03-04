@@ -234,4 +234,3 @@ ts = SimulatedTrading(
     )
 
 ts.run()
-
