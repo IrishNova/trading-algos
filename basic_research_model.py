@@ -138,7 +138,7 @@ class SimulatedTrading:
 
     def short_in_play(self):
         """
-        Logic that controls an open, short positoin
+        Logic that controls an open, short position
         """
         if self.price_now > self.stop:
             print("Close short, stop")
@@ -223,6 +223,7 @@ class SimulatedTrading:
             self.bar = i
             self.price_now = self.raw.closePrice.iloc[i]
             self.first_level_logic()
+
 
 short_average = 30
 long_average = 60
