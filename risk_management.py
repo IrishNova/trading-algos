@@ -3,6 +3,9 @@ Dynamically generates stop and limits based on market conditions.
 
 Still a helluva lot of work to do. 
 
+This is simply a jumping off point showing how someone could meld a sort of AI and price
+action into developing a view of risk. 
+
 How it works: (in theory)
   1: Slices the the 20 days from current date.
   2: Searches for similar periods.
