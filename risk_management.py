@@ -26,6 +26,8 @@ Disclaimer:
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance
+from tslearn.clustering import TimeSeriesKMeans
 
 from datetime import datetime   #TODO delete this with the rest of the dummy code
 
@@ -38,7 +40,6 @@ class RiskManager:
         self.closest_date = None
         self.working = None
         self.sim_x = None
-        self.ad = None
         self.load_data()
 
     def load_data(self):
@@ -53,35 +54,41 @@ class RiskManager:
             self.closest_date = self.df.index[self.df.index < d][-1]
 
     def slice_data(self):
-        self.dx = self.df.loc[:self.closest_date].copy()
-        self.working = self.dx.tail(20)
+        self.dx = self.df.loc[:self.closest_date].tail(20)  # Gets last 20 days up to closest_date
 
     def finder(self, n_clusters=5):
-        rolling_windows = self.dx['delta'].rolling(window=20)
-        feature_vectors = np.array([window for window in rolling_windows if len(window) == 20])
-        if len(feature_vectors) > 0:
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-            kmeans.fit(feature_vectors)
+        # Ensure data is in correct shape (n_samples, n_timestamps, n_features)
+        # Here, each "sample" is a day, and we reshape it accordingly
+        data_scaled = self.dx.values.reshape(1, self.dx.shape[0], self.dx.shape[1])
+        scaler = TimeSeriesScalerMeanVariance(mu=0., std=1.)
+        data_scaled = scaler.fit_transform(data_scaled)
 
-            working_features = np.array(self.working['delta']).reshape(1, -1)
-            working_cluster = kmeans.predict(working_features)
-
-            self.sim_x = np.where(kmeans.labels_ == working_cluster[0])[0]
-
-    def forward(self):
-        window_offset = 20 - 1
-        self.ad = [self.dx.index[i + window_offset] for i in self.sim_x]
+        model = TimeSeriesKMeans(n_clusters=n_clusters, metric="dtw", verbose=True)
+        self.sim_x = model.fit_predict(data_scaled.reshape(self.dx.shape))  # Fit model
 
     def individual_vol(self):
-        for x in self.ad:
-            y = self.dx.loc[x:].head(30)
-            print(y)
+        cluster_labels = np.unique(self.sim_x)  # Get unique cluster labels
+
+        for label in cluster_labels:
+            # Find indices of days belonging to the current cluster
+            indices = np.where(self.sim_x == label)[0]
+
+            if indices.size > 0:
+                last_day_index = indices[-1]  # Last day of the cluster in 'self.dx'
+                last_date = self.dx.index[last_day_index]  # Get the actual date
+
+                # Now find this date in 'self.df' to get the next 30 days
+                all_dates = self.df.index
+                target_idx = all_dates.get_loc(last_date) + 1  # Get next day's index in 'self.df'
+
+                if target_idx < len(all_dates) - 30:  # Check if there are at least 30 days ahead
+                    forward_30 = self.df.iloc[target_idx:target_idx + 30]  # Get next 30 days
+                    print(forward_30)  # Print the forward 30 days data
 
     def manage(self, d):
         self.date_match(d)
         self.slice_data()
         self.finder()
-        self.forward()
         self.individual_vol()
 
 
@@ -97,4 +104,8 @@ rm = RiskManager()
 for dx in temp_dates:
     rm.manage(dx)
     print("-----"*25)
-
+    print("-----" * 25)
+    print("-----" * 25)
+    print("-----" * 25)
+    print("-----" * 25)
+    print("-----" * 25)
