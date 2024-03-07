@@ -6,9 +6,9 @@ Still a helluva lot of work to do.
 How it works: (in theory)
   1: Slices the the 20 days from current date.
   2: Searches for similar periods.
-  3: (TBD) Takes the last date of each similar period
-  4: (TBD) Slices the dataframe from that date 10 periods forward
-  5: (TBD) Looks at the stdev/vol of those periods
+  3: Takes the last date of each similar period
+  4: Slices the dataframe from that date 30 periods forward
+  5: (TBD) Looks at the metrics of those periods against the larger dataset.
   6: (TBD) Uses this to set stops... more vol, looser. Less vol, tighter.
   7: (TBD) Calculates how many ticks to allow & returns a stop-loss or limit price.
 
@@ -35,6 +35,7 @@ class RiskManager:
         self.closest_date = None
         self.working = None
         self.sim_x = None
+        self.ad = None
         self.load_data()
 
     def load_data(self):
@@ -52,15 +53,7 @@ class RiskManager:
         self.dx = self.df.loc[:self.closest_date].copy()
         self.working = self.dx.tail(20)
 
-    def manage(self, d):
-        self.date_match(d)
-        self.slice_data()
-        self.finder()
-
     def finder(self, n_clusters=5):
-
-        self.sim_x = []
-
         rolling_windows = self.dx['delta'].rolling(window=20)
         feature_vectors = np.array([window for window in rolling_windows if len(window) == 20])
         if len(feature_vectors) > 0:
@@ -70,13 +63,26 @@ class RiskManager:
             working_features = np.array(self.working['delta']).reshape(1, -1)
             working_cluster = kmeans.predict(working_features)
 
-            similar_periods_indices = np.where(kmeans.labels_ == working_cluster[0])[0]
+            self.sim_x = np.where(kmeans.labels_ == working_cluster[0])[0]
 
-            print(similar_periods_indices)
+    def forward(self):
+        window_offset = 20 - 1
+        self.ad = [self.dx.index[i + window_offset] for i in self.sim_x]
+
+    def individual_vol(self):
+        for x in self.ad:
+            y = self.dx.loc[x:].head(30)
+            print(y)
+
+    def manage(self, d):
+        self.date_match(d)
+        self.slice_data()
+        self.finder()
+        self.forward()
+        self.individual_vol()
 
 
-#TODO dummy code to be deleted 
-temp_dates = [datetime(2018, 11, 22, 11, 26),  
+temp_dates = [datetime(2018, 11, 22, 11, 26),
               datetime(2019, 9, 15, 14, 26),
               datetime(2020, 8, 6, 14, 26),
               datetime(2021, 7, 16, 14, 26),
