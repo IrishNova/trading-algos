@@ -1,7 +1,10 @@
 """
 Dynamically generates stop and limits based on market conditions.
 
-Still a helluva lot of work to do. 
+Still a helluva lot of work to do. There's a major error because the clusters are being found from the 
+full dataset, not the subset starting with the 'current' date. 
+
+These things take time, I'll continue to work on it so check back. For now, this is where it's at. 
 
 This is simply a jumping off point showing how someone could meld a sort of AI and price
 action into developing a view of risk. 
