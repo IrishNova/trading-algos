@@ -28,7 +28,7 @@ Disclaimer:
 
 import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
+from tslearn.metrics import dtw
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.clustering import TimeSeriesKMeans
 
@@ -38,11 +38,15 @@ from datetime import datetime   #TODO delete this with the rest of the dummy cod
 class RiskManager:
 
     def __init__(self):
+        self.cluster_indexes = None
+        self.start_index = None
+        self.model = None
         self.df = None
         self.dx = None
         self.closest_date = None
         self.working = None
         self.sim_x = None
+        self.ad = None
         self.load_data()
 
     def load_data(self):
@@ -57,42 +61,57 @@ class RiskManager:
             self.closest_date = self.df.index[self.df.index < d][-1]
 
     def slice_data(self):
-        self.dx = self.df.loc[:self.closest_date].tail(20)  # Gets last 20 days up to closest_date
+        self.dx = self.df.loc[:self.closest_date].copy() # data for each simulation
+        self.working = self.dx.tail(20) # base data for clusters. Each cluster should look like this
 
-    def finder(self, n_clusters=5):
-        # Ensure data is in correct shape (n_samples, n_timestamps, n_features)
-        # Here, each "sample" is a day, and we reshape it accordingly
-        data_scaled = self.dx.values.reshape(1, self.dx.shape[0], self.dx.shape[1])
+    def pattern_generator(self, n_clusters=5):
+        """Identifies pattern of the self.working slice"""
+        data = self.working.values.reshape(self.working.shape[0], -1)
         scaler = TimeSeriesScalerMeanVariance(mu=0., std=1.)
-        data_scaled = scaler.fit_transform(data_scaled)
-
-        model = TimeSeriesKMeans(n_clusters=n_clusters, metric="dtw", verbose=True)
-        self.sim_x = model.fit_predict(data_scaled.reshape(self.dx.shape))  # Fit model
+        data_scaled = scaler.fit_transform(data)
+        self.model = TimeSeriesKMeans(n_clusters=n_clusters, metric="dtw", verbose=True)
+        self.sim_x = self.model.fit_predict(data_scaled)
 
     def individual_vol(self):
-        cluster_labels = np.unique(self.sim_x)  # Get unique cluster labels
+        # Ensure data is appropriately scaled, as done before clustering
+        scaler = TimeSeriesScalerMeanVariance(mu=0., std=1.)
+        dx_scaled = scaler.fit_transform(self.dx.values.reshape(self.dx.shape[0], -1))
 
-        for label in cluster_labels:
-            # Find indices of days belonging to the current cluster
-            indices = np.where(self.sim_x == label)[0]
+        # Calculate DTW distance from each point in dx to each cluster centroid
+        dtw_distances = np.zeros((self.dx.shape[0], self.model.cluster_centers_.shape[0]))
 
-            if indices.size > 0:
-                last_day_index = indices[-1]  # Last day of the cluster in 'self.dx'
-                last_date = self.dx.index[last_day_index]  # Get the actual date
+        for i in range(self.dx.shape[0]):
+            for j, centroid in enumerate(self.model.cluster_centers_):
+                # Calculate DTW distance and store it
+                dtw_distances[i, j] = dtw(dx_scaled[i], centroid)
 
-                # Now find this date in 'self.df' to get the next 30 days
-                all_dates = self.df.index
-                target_idx = all_dates.get_loc(last_date) + 1  # Get next day's index in 'self.df'
+        # Instead of finding 10 closest points per cluster, find unique closest points across all clusters
+        flat_distances = dtw_distances.flatten()
+        sorted_indices = np.argsort(flat_distances)[:self.dx.shape[0] * self.model.cluster_centers_.shape[0]]
 
-                if target_idx < len(all_dates) - 30:  # Check if there are at least 30 days ahead
-                    forward_30 = self.df.iloc[target_idx:target_idx + 30]  # Get next 30 days
-                    print(forward_30)  # Print the forward 30 days data
+        unique_closest_points = []
+        seen = set()
+
+        # Iterate over sorted indices to pick unique entries until you fill your quota of 10 unique points
+        for idx in sorted_indices:
+            data_idx = idx // self.model.cluster_centers_.shape[0]  # Convert flat index back to data index
+            if data_idx not in seen:
+                seen.add(data_idx)
+                unique_closest_points.append(data_idx)
+            if len(seen) >= 10:
+                break
+
+        self.start_index = self.dx.iloc[unique_closest_points]
+
+    def end_dates(self):
+        print("hello world")
 
     def manage(self, d):
-        self.date_match(d)
-        self.slice_data()
-        self.finder()
-        self.individual_vol()
+            self.date_match(d)
+            self.slice_data()
+            self.pattern_generator()
+            self.individual_vol()
+            self.end_dates()
 
 
 temp_dates = [datetime(2018, 11, 22, 11, 26),
@@ -106,7 +125,8 @@ temp_dates = [datetime(2018, 11, 22, 11, 26),
 rm = RiskManager()
 for dx in temp_dates:
     rm.manage(dx)
-    print("-----"*25)
+    print("--------"*25)
+    print("--------" * 25)
     print("-----" * 25)
     print("-----" * 25)
     print("-----" * 25)
