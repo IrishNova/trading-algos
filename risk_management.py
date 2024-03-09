@@ -31,6 +31,7 @@ from tslearn.metrics import dtw
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.clustering import TimeSeriesKMeans
 
+
 class PatternRecognition:
     """
     Searches historical data to find timeframes with the most similar pattern to
@@ -146,11 +147,11 @@ class MetricCalc:
         self.model_kurtosis = None
         self.high_skew = False
         self.high_kurtosis = False
-        self.price = None
 
     def operator_results(self):
         self.raw_stats()
         self.logic_one()
+        self.logic_two()
         return self.price
 
     def raw_stats(self):
@@ -209,12 +210,14 @@ class RiskManager:
         self.dx = self.df.loc[:self.closest_date].copy() # data for each simulation
         self.working = self.dx.tail(20) # base data for clusters. Each cluster should look like this
 
-    def manage(self, d):
-        self.date_match(d)
+    def manage(self, dte, price, direction):
+        self.date_match(dte)
         self.slice_data()
         return MetricCalc(
             PatternRecognition(self.working, self.dx).operator(),
             self.dx,
-            85.50,
-            True
+            price,
+            direction
             ).operator_results()
+
+
