@@ -1,9 +1,9 @@
 """
 Brief:
     Building off the basic_backtest model, below is what an actual research model more or less looks like.
-    Keeping with the same generic signals, the code's structure is expanded from functions to a Class. 
+    Keeping with the same generic signals, the code's structure is expanded from functions to a Class.
     This class ultimately will work with other classes for things like risk management and recording trades.
-    For now though, just focus on how the algo works. 
+    For now though, just focus on how the algo works.
 
 How it works:
     1: The class SimulatedTrading is initiated (Object created)
@@ -19,14 +19,16 @@ How it works:
 Added details:
     What's below is the jumping off point. As I find the time, I'll build out the risk management class,
     the TradeBook class, and a class that calculates performance metrics. Ultimately, all of these classes,
-    including the one here, will be rolled into a brute-force backtester which simulates tens of thousands 
+    including the one here, will be rolled into a brute-force backtester which simulates tens of thousands
     to millions of combinations of variables. These simulations will be saved in a database so that they're
     able to be reviewed. This will guide the researcher's understand how the model performs.
 
     In terms of signal generation, this is always in its own Class as well. However, for simplicity and continuity
     I've included it within the model. To reiterate, these are not real signals and will lose a
     trader money. Maybe in the future I'll build out a more robust signal class but for now, just understand
-    what's below is spoofed a bit so that it's easy to follow.  
+    what's below is spoofed a bit so that it's easy to follow.
+
+
 
 Disclaimer:
     Trading futures comes with substantial risk.
@@ -34,6 +36,82 @@ Disclaimer:
     By using any part of this code, the user accepts
     full ownership of the risks associated.
 """
+
+import pandas as pd
+import random
+from bson import ObjectId
+from risk_management import RiskManager
+
+
+class TradeBook:  # TODO ultimately this will be tied in to MongoDB
+    def __init__(self):
+        self.aum = 100000
+        self.fee = 0.50  # Not many people get this treatment, but I happen to work for a guy who does. Adjust it according to YOUR trading costs.
+        self.long_stop = 0.025 # Generalize these such that there's only a stop and a limit.
+        self.long_limit = 0.015
+        self.short_limit = 0.025
+        self.long_stop = 0.015
+        self.open_ticket = None
+        self.trade_log = {}     # delete this when the rest of the infrastructuer is built out
+
+    def slippage(self, price):
+        slippage_percentage = random.uniform(0,
+                                             0.0025)  # 0.25% max, need to measure slippage of CL in future research project
+        slippage_amount = price * slippage_percentage
+        return slippage_amount
+
+    def stop_target(self, price,
+                    direction):  # day one, week one risk management here people. Probalby will move this to another Class long at some point.
+        high_mark = price + (price * self.long_limit)
+        low_mark = price - (price * self.long_stop)
+        if direction:
+            return high_mark, low_mark
+        else:
+            return low_mark, high_mark
+
+    def position_size(self, price):
+        return self.aum // price  # Place holder Not the way to do it, needs to model with leverage. Ultimately this will be another Class w/it's own risk management.
+
+    def new_id(self):
+        self.open_ticket = ObjectId()
+
+    def open_position(self, date_time, direction, price):
+        self.new_id()
+        ticket = {"_id": self.open_ticket,
+                  "type": "open",
+                  "datetime": date_time,
+                  "direction": direction,
+                  "price": price,
+                 }
+
+    def close_position(self, date_time, direction, price):
+        ticket = {"type": "close",
+                  "datetime": date_time,
+                  "direction": direction,
+                  "price": price,
+                  "open_transaction": self.open_ticket
+                  }
+    # Open position
+    # hold that ticket
+    # Close position
+    # Assemble BSON document
+    # load to database
+    def slip_generator(self, time, price, direction):
+        if direction: # Go long
+            paid = price + self.slippage(price)
+            self.trade_log[time] = {"transaction_price": paid,
+                                    "direction": direction,
+                                    "contracts": self.position_size(price)}
+        else: # Go Short
+            paid = price - self.slippage(price)
+            self.trade_log[time] = {"transaction_price": paid,
+                                    "direction": direction}
+
+    def place_order(self, time, price, direction):      # should be good to go
+        high_mark, low_mark = self.stop_target(price, direction)
+        self.slip_generator(time, price, direction)
+        return high_mark, low_mark
+
 
 def temp_risk_mgmt(price, direction):
     """
@@ -56,17 +134,16 @@ def temp_risk_mgmt(price, direction):
 
 class SimulatedTrading:
 
-    def __init__(self, ema1, ema2, trade_book):
+    def __init__(self, ema1, ema2, risk_mgmt, trade_book):
         self.span_1 = ema1
         self.span_2 = ema2
+        self.risk_m = risk_mgmt
         self.tb = trade_book
-        
         self.raw = None
         self.price_now = None
         self.bar = None
         self.stop = None
         self.limit = None
-        
         self.open_long = False
         self.open_short = False
         self.wait_long = False
@@ -84,9 +161,10 @@ class SimulatedTrading:
     def data_fetch(self):
         """
         Imports data from a CSV
+        :return:
         """
         x = pd.read_csv('CL_minute_full.csv')
-        self.raw = x.set_index(x.time)
+        self.raw = x.set_index(x.time).tail(2500)
 
     def signal_generation(self):
         """
@@ -107,22 +185,28 @@ class SimulatedTrading:
         risk management and position size are brought into the model, from outside classes. This is also where
         a method from the TradeBook class will be called to record the trade.
         :param direction: Ture = Long, False = Short
+        :return:
         """
         if direction:
-            self.stop, self.limit = temp_risk_mgmt(self.raw.closePrice.iloc[self.bar], direction)
+            self.stop = self.risk_m.manage(self.raw.index[self.bar], self.raw.closePrice.iloc[self.bar], True)
+
+            x, self.limit = temp_risk_mgmt(self.raw.closePrice.iloc[self.bar], direction)
         else:
-            self.limit, self.stop = temp_risk_mgmt(self.raw.closePrice.iloc[self.bar], direction)
+            self.limit = self.risk_m.manage(self.raw.index[self.bar], self.raw.closePrice.iloc[self.bar], False)
+            x, self.stop = temp_risk_mgmt(self.raw.closePrice.iloc[self.bar], direction)
         print("Open Position")
 
     def close_position(self):
         """
         Will close send the close price to the TradeBook and
+        :return:
         """
         print("Close Position")
 
     def long_in_play(self):
         """
         Logic that controls an open, long position
+        :return:
         """
         if self.price_now > self.limit:
             print("Close long, limit")
@@ -139,6 +223,7 @@ class SimulatedTrading:
     def short_in_play(self):
         """
         Logic that controls an open, short position
+        :return:
         """
         if self.price_now > self.stop:
             print("Close short, stop")
@@ -155,6 +240,7 @@ class SimulatedTrading:
     def long_search(self):
         """
         Logic that controls taking a long position
+        :return:
         """
         if self.raw.signal_4.iloc[self.bar] > self.raw.signal_5.iloc[self.bar]:
             print("open long")
@@ -165,6 +251,7 @@ class SimulatedTrading:
     def short_search(self):
         """
         Logic that controls taking a short position
+        :return:
         """
         if self.raw.signal_4.iloc[self.bar] < self.raw.signal_5.iloc[self.bar]:
             print("open short")
@@ -175,6 +262,7 @@ class SimulatedTrading:
     def new_cycle(self):
         """
         First clause, used on startup only.
+        :return:
         """
         if self.raw.signal_4.iloc[self.bar] > self.raw.signal_5.iloc[self.bar]:
             print("first open Long")
@@ -191,6 +279,7 @@ class SimulatedTrading:
         Logic that controls what direction trade the algo is looking for.
         For instance, when it finishes a long position, it begins to look for a short position.
         If no position has been taken yet, it calls the bottom clause.
+        :return:
         """
         if self.wait_long:
             self.long_search()  # look for long signal
@@ -205,6 +294,7 @@ class SimulatedTrading:
         """
         Checks to see if a position needs to be closed
         or calls next method which looks to see if a position needs to be open.
+        :return:
         """
         if self.open_long:
             self.long_in_play()
@@ -218,6 +308,7 @@ class SimulatedTrading:
     def simulation(self):
         """
         Cycles through dataframe
+        :return:
         """
         for i in range(len(self.raw)):
             self.bar = i
@@ -225,13 +316,7 @@ class SimulatedTrading:
             self.first_level_logic()
 
 
-short_average = 30
-long_average = 60
-
-ts = SimulatedTrading(
-    short_average,
-    long_average,
-    None
-    )
-
+rm = RiskManager()
+ts = SimulatedTrading(30, 60, rm, None)
 ts.run()
+
