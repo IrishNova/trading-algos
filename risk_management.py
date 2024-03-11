@@ -1,11 +1,13 @@
 """
 Dynamically generates stop and limits based on market conditions.
 
-Needs annotatations and to be refactored a bit, but this is how a person could use machine learning
-to look for similar patterns of volatility to set stop/limits. I also have to set it up to accept 
-a price and direction. We're about 95% there though. 
+More volatility dictates greater risk management, in this code. Depending on 
+the specific market a person's trading, or their strategy, this could be reversed. 
 
-This is simply a jumping off point showing how someone could meld a sort of AI and price
+Again, this is a really basic example of how things work. Some simple pattern recognition is 
+used to establish a forward view of volatility.  
+
+This is simply a jumping off point showing how someone could meld a sort of machine learning and price
 action into developing a view of risk. 
 
 How it works: (in theory)
@@ -23,7 +25,6 @@ Disclaimer:
     By using any part of this code, the user accepts
     full ownership of the risks associated.
 """
-
 
 import pandas as pd
 import numpy as np
@@ -49,6 +50,7 @@ class PatternRecognition:
         self.operator()
 
     def operator(self):
+        """Controls this class's methods"""
         self.pattern_generator()
         self.individual_vol()
         self.ten_closest_matches()
@@ -65,7 +67,8 @@ class PatternRecognition:
         self.sim_x = self.model.fit_predict(data_scaled)
 
     def individual_vol(self):
-        # Ensure data is appropriately scaled, as done before clustering
+        """Sets up each vol period (cluster)"""
+
         scaler = TimeSeriesScalerMeanVariance(mu=0., std=1.)
         dx_scaled = scaler.fit_transform(self.dx.values.reshape(self.dx.shape[0], -1))
 
@@ -74,7 +77,6 @@ class PatternRecognition:
 
         for i in range(self.dx.shape[0]):
             for j, centroid in enumerate(self.model.cluster_centers_):
-                # Calculate DTW distance and store it
                 dtw_distances[i, j] = dtw(dx_scaled[i], centroid)
 
         # Instead of finding 10 closest points per cluster, find unique closest points across all clusters
@@ -82,10 +84,11 @@ class PatternRecognition:
         self.sorted_indices = np.argsort(flat_distances)[:self.dx.shape[0] * self.model.cluster_centers_.shape[0]]
 
     def ten_closest_matches(self):
+        """Scans the clusters to find the ten which most closely match the
+        curent period"""
         unique_closest_points = []
         seen = set()
 
-        # Iterate over sorted indices to pick unique entries until you fill your quota of 10 unique points
         for idx in self.sorted_indices:
             data_idx = idx // self.model.cluster_centers_.shape[0]  # Convert flat index back to data index
             if data_idx not in seen:
@@ -97,42 +100,29 @@ class PatternRecognition:
         self.start_index = self.dx.iloc[unique_closest_points]
 
     def end_dates(self):
+        """Gets the last date of each identified cluster"""
         future_dates_list = []
 
-        # Iterate over each date in the self.start_index DataFrame
         for date in self.start_index.index:
-            # Check if the date exists in self.dx
-            if date in self.dx.index:
-                # Get the position of this date in self.dx
-                current_pos = self.dx.index.get_loc(date)
 
-                # Calculate the position of the date 20 rows down
+            if date in self.dx.index:
+                current_pos = self.dx.index.get_loc(date)
                 future_pos = current_pos + 20
 
-                # Check if the future position is within the bounds of self.dx
                 if future_pos < len(self.dx):
-                    # If within bounds, get the future date
                     future_date = self.dx.index[future_pos]
-                    # Append the future date to the list
                     future_dates_list.append(future_date)
 
-        # Create a new DataFrame with the rows corresponding to the future dates
         self.fd = self.dx.loc[future_dates_list]
 
     def next_periods(self):
-        # Iterate over each date in self.fd
+        """Uses the last date of the identified clusters to access
+        forward data. """
+
         for date in self.fd.index:
-            # Ensure the date is within self.dx
             if date in self.dx.index:
-                # Get the position of this date in self.dx
                 start_pos = self.dx.index.get_loc(date)
-
-                # Create a slice of self.dx starting from this position
-                # Note: Adjust the slicing as per your requirement.
-                # Here, it's assumed you want to include all data from the start_pos to the end of self.dx.
                 df_slice = self.dx.iloc[start_pos:]
-
-                # Append the slice to the list
                 self.data_view.append(df_slice)
 
 
@@ -175,14 +165,14 @@ class MetricCalc:
     def logic_two(self):
         if self.high_skew and self.high_kurtosis:
             if self.direction:
-                self.price -= 0.50
+                self.price -= 0.05
             else:
-                self.price += 0.50
+                self.price += 0.05
         else:
             if self.direction:
-                self.price -= 0.25
+                self.price -= 0.10
             else:
-                self.price += 0.25
+                self.price += 0.10
 
 
 class RiskManager:
@@ -195,22 +185,28 @@ class RiskManager:
         self.load_data()
 
     def load_data(self):
+        """Loads VIX data, this would be better if it were CVOL for the specific
+        comodity"""
         self.df = pd.read_csv('vix_daily_data.csv', index_col='Date', parse_dates=True)
         self.df['d'] = self.df.Close.pct_change()
         self.df['delta'] = np.log1p(self.df['d'])
         self.df = self.df.dropna()
 
     def date_match(self, d):
+        """Gets the data to slice into the reference VIX data"""
         if d in self.df.index:
             self.closest_date = d
         else:
             self.closest_date = self.df.index[self.df.index < d][-1]
 
     def slice_data(self):
-        self.dx = self.df.loc[:self.closest_date].copy() # data for each simulation
-        self.working = self.dx.tail(20) # base data for clusters. Each cluster should look like this
+        """Cuts main dataframe to reflect current working dates.
+        Slices out the last 20 periods worth of data"""
+        self.dx = self.df.loc[:self.closest_date].copy()
+        self.working = self.dx.tail(20)
 
     def manage(self, dte, price, direction):
+        """How the class is controlled from the backtester."""
         self.date_match(dte)
         self.slice_data()
         return MetricCalc(
@@ -219,5 +215,4 @@ class RiskManager:
             price,
             direction
             ).operator_results()
-
 
