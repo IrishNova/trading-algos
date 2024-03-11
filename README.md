@@ -15,3 +15,10 @@ simple_backtest - This is the most basic, stripped-down version of a research al
 basic_research_model - A robust backtesting framework that's a copy of how I build them for researching strategies. As it stands now, this is just the simulation part that iterates over the dataframe and chooses if it should buy, sell, or stay flat (the logic). Risk management, trade recording, and performance calculations are not performed.  Still, there's a lot to view here. Focus on how I use Boolean operators (True/False) to dictate the logic within the algorithm and choose which methods to call.  
 
 risk_management - Calculates a stop/limit price using machine learning and the VIX. In a real world application, you'd want to use a better proxy for volatility, especally CME's new C-VOL metric. You'd also want to do a better job of setting the stop/limit in terms of how may ticks to allow. Basically though, this app gives more wiggle room for the position in times of high vol, and less during more stable periods. 
+
+
+_Other Files_
+
+tradebook - Logs and records model performance, transactions, details about the model.
+
+result_calculator - Generates performance metrics to be stored using tradebook. 
