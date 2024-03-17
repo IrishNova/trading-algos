@@ -34,7 +34,7 @@ def run_results(data, aum=1000):
         "shoreRatio": pos_std(df) / neg_std(df),
         "skew": df.pl_delta.skew(),
         "kurtosis": df.pl_delta.kurtosis(),
-        "sortin": None,
+        "sortino": None,
         "sharpe": None,
         "treynor": None,
         "calmar": None,
@@ -60,7 +60,7 @@ def run_results(data, aum=1000):
 #   - Shore Ratio
 #   - Skew
 #   - Kurtosis
-#   - Sortin Ratio
+#   - Sortino Ratio
 #   - Sharpe Ratio
 #   - Treynor Ratio
 #   - Calmar Ratio
